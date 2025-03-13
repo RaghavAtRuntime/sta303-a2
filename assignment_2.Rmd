@@ -2,15 +2,19 @@
 title: "Assignment 2"
 subtitle: ""
 author: "Raghav Sinha"
-date: "March 12, 2025"
+date: today
+date-format: long
 abstract: ""
+number-sections: true
 bibliography:
-output:
-  bookdown::pdf_document2:
-    includes:  
-      in_header: preamble-latex.tex
-fontsize: 12pt
-linestretch: 1.5
+format:
+  pdf:
+    toc: true
+    number-sections: true
+    colorlinks: true
+editor: 
+  markdown: 
+    wrap: 72
 ---
 
 ```{r}
