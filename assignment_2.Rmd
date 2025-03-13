@@ -21,7 +21,7 @@ editor:
 #| include: false
 #| warning: false
 #| message: false
-
+# install Pmisc using install.packages("Pmisc", repos="http://R-Forge.R-project.org")
 library(ggplot2)
 library(readr)
 library(tibble)
