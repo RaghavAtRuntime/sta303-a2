@@ -1,0 +1,122 @@
+---
+title: "Assignment 2 Answers"
+subtitle: ""
+author: "Raghav Sinha, Yutong Han"
+date: today
+date-format: long
+abstract: ""
+number-sections: true
+format:
+  pdf:
+    toc: true
+    number-sections: true
+    colorlinks: true
+editor: 
+  markdown: 
+    wrap: 72
+---
+# Motorcycle Deaths
+
+## Question 1
+$$Y_t \sim \text{Poisson}(\mu_t)$$
+$$log(\mu_t) = \beta_0 + f(t) + \text{offset}(\log(\text{MonthDays}_t)) + g(\text{month}_t) + \epsilon_t$$
+
+- $Y_t$ represents the weekly number of deaths at time t. It is assumed to follow a Poisson distribution.
+- The Poisson distribution is suitable as number of deaths is a count variable. 
+- The log link function is used to connect the mean to the linear predictor. It ensures that the mean $\mu_t$ remains positive.
+- $\beta_0$ represents the baseline level of deaths when all other terms are zero.
+- $f(t)$ is a smooth function of time, it captures the non-linear trend in deaths over time.
+- $\log(\text{MonthDays}_t)$ is an offset that accounts for the varying number of days in each month.
+- $g(\text{month}_t)$ is a function that captures the seasonal effect of the month on the number of deaths (eg. more accidents in the summer due to increased riding.)
+
+## Question 2
+
+```{r}
+#| include: false
+#| warning: false
+#| message: false
+theUrl = "http://pbrown.ca/teaching/appliedstats/data/motorcycle.rds"
+theFile = basename(theUrl)
+if (!file.exists(theFile)) download.file(theUrl, theFile)
+x = readRDS(theFile)
+```
+
+```{r}
+#| warning: false
+#| message: false
+#| fig-width: 14
+#| fig-height: 8
+library(mgcv)
+library(Hmisc)
+
+x$dateInt <- as.integer(x$date)
+x$logMonthDays <- log(Hmisc::monthDays(x$date))
+x$month <- factor(format(x$date, "%b"), 
+                  levels = format(ISOdate(2000, 1:12, 1), "%b"))
+
+# Fit the GAM
+gam_model <- gam(killed ~ s(dateInt, bs = "cr", k = 50) 
+                 + offset(logMonthDays) + month,
+                 data = x,
+                 family = poisson(link = "log"),
+                 method = "REML")
+
+# Summary of the model
+summary(gam_model)
+```
+
+```{r}
+#| warning: false
+#| message: false
+#| include: false
+# Generate predictions for new data
+newdata <- data.frame(date = seq(as.Date("1975/1/1"), 
+                                 as.Date("2030/1/1"), by = "month"))
+newdata$dateInt <- as.integer(newdata$date)
+newdata$logMonthDays <- log(30)
+newdata$month <- format(newdata$date, "%b")
+```
+
+## Question 3
+
+```{r}
+#| warning: false
+#| message: false
+#| echo: false
+#| fig-width: 14
+#| fig-height: 8
+#| fig-cap: "Trend for for motorcycle deaths over time with 95% CI. The fitted curve captures both the long-term decline in deaths and a strong seasonal pattern. The parametric coefficients show significant seasonal effects, with deaths peaking in the summer months (June to August) and reaching a minimum in winter. For example, compared to January, deaths increase by 107% in August (exp(1.071) ≈ 2.92), while December shows no significant difference from January."
+# Generate predictions with standard errors
+pred <- predict(gam_model, newdata, type = "link", se.fit = TRUE)
+
+# Compute confidence intervals (95% CI)
+alpha <- 0.05  # Significance level for 95% confidence
+z_value <- qnorm(1 - alpha / 2)  # Critical value for normal distribution
+lower_ci <- pred$fit - z_value * pred$se.fit  # Lower bound of CI
+upper_ci <- pred$fit + z_value * pred$se.fit  # Upper bound of CI
+
+# Transform predictions and confidence intervals back to the response scale
+pred_fit <- exp(pred$fit)  # Fitted values on the response scale
+lower_ci <- exp(lower_ci)  # Lower CI on the response scale
+upper_ci <- exp(upper_ci)  # Upper CI on the response scale
+
+# Plot the observed data
+plot(x$date, x$killed, cex = 0.2, log = "y", xlab = "Date", 
+     ylab = "Number of Deaths",
+     yaxt = "n")  # Suppress default y-axis labels
+
+# Add custom y-axis labels
+y_ticks <- c(5, 10, 20, 50, 100)
+axis(2, at = y_ticks, labels = y_ticks, las = 1)
+
+# Add fitted values and confidence bands
+lines(newdata$date, pred_fit, col = "red", lwd = 2)  # Fitted values
+polygon(c(newdata$date, rev(newdata$date)), c(lower_ci, rev(upper_ci)),
+        col = rgb(1, 0, 0, 0.3), border = NA)  # Confidence band
+
+# Add a legend
+legend("topright", legend = c("Observed", "Fitted", "95% CI"),
+       col = c("black", "red", rgb(1, 0, 0, 0.3)), lty = c(NA, 1, NA),
+       pch = c(1, NA, NA), lwd = c(NA, 2, NA), 
+       fill = c(NA, NA, rgb(1, 0, 0, 0.3)))
+```

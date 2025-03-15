@@ -6,7 +6,6 @@ date: today
 date-format: long
 abstract: ""
 number-sections: true
-bibliography:
 format:
   pdf:
     toc: true
@@ -24,7 +23,7 @@ editor:
 # install Pmisc using install.packages("Pmisc", repos="http://R-Forge.R-project.org")
 library(ggplot2)
 library(readr)
-library(tibble)
+library(tibble) 
 library(knitr)
 library(kableExtra)
 library(dplyr)
@@ -39,12 +38,18 @@ library(Pmisc)
 
 ## Motorcycle Deaths
 ```{r}
+#| include: false
+#| warning: false
+#| message: false
 theUrl = "http://pbrown.ca/teaching/appliedstats/data/motorcycle.rds"
 theFile = basename(theUrl)
 if (!file.exists(theFile)) download.file(theUrl, theFile)
 x = readRDS(theFile)
 ```
 ```{r}
+#| include: false
+#| warning: false
+#| message: false
 x$dateInt = as.integer(x$date)
 x$logMonthDays = log(Hmisc::monthDays(x$date))
 x$month = factor(format(x$date, "%b"), levels = format(ISOdate(2000, 1:12, 1), "%b"))
@@ -63,6 +68,9 @@ matlines(newdata$date, exp(cbind(pred1, pred2)), lty = 1)
 ## Heat
 
 ```{r}
+#| include: false
+#| warning: false
+#| message: false
 heatUrl = "http://pbrown.ca/teaching/appliedstats/data/sableIsland.rds"
 dir.create("cache", showWarnings = FALSE)
 heatFile = file.path("cache", basename(heatUrl))
@@ -75,10 +83,16 @@ heat$summer = heat$month %in% 5:10
 ```
 
 ```{r}
+#| include: false
+#| warning: false
+#| message: false
 heat[100, ]
 ```
 
 ```{r}
+#| include: false
+#| warning: false
+#| message: false
 heat$dateInt = as.integer(heat$Date)
 heat$yearFac = factor(format(heat$Date, "%Y"))
 heatSub = heat[heat$summer & !is.na(heat$Max.Temp), ]
@@ -89,10 +103,16 @@ res3 = gam(update.formula(Max.Temp ~ s(dateInt, pc = as.integer(as.Date("1990/7/
 ```
 
 ```{r}
+#| include: false
+#| warning: false
+#| message: false
 res1$formula
 ```
 
 ```{r}
+#| include: false
+#| warning: false
+#| message: false
 Syear = unique(heatSub$yearFac)
 predYear = do.call(cbind, predict(res1, newdata = data.frame(yearFac = Syear, dateInt = 0), type = "terms", terms = "s(yearFac)", se.fit = TRUE)) %*% Pmisc::ciMat()
 newdat = data.frame(Date = seq(as.Date("1900/1/1"), as.Date("2035/12/31"), by = "2 weeks"), yearFac = Syear[1])
@@ -105,6 +125,9 @@ simTrend = tcrossprod(newheat[, isTrend], simCoef[, isTrend])
 ```
 
 ```{r}
+#| include: false
+#| warning: false
+#| message: false
 Syear = as.numeric(as.character(Syear))
 matplot(Syear, predYear, xlab = "Degrees C", cex = c(1, 0, 0), pch = 16, col = "black")
 segments(Syear, predYear[, 2], Syear, predYear[, 3], lwd = 0.5)
