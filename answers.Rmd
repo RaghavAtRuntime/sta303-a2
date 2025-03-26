@@ -15,19 +15,29 @@ editor:
   markdown: 
     wrap: 72
 ---
+
 # Motorcycle Deaths
 
 ## Question 1
+
 $$Y_t \sim \text{Poisson}(\mu_t)$$
 $$log(\mu_t) = \beta_0 + f(t) + \text{offset}(\log(\text{MonthDays}_t)) + g(\text{month}_t) + \epsilon_t$$
 
-- $Y_t$ represents the weekly number of deaths at time t. It is assumed to follow a Poisson distribution.
-- The Poisson distribution is suitable as number of deaths is a count variable. 
-- The log link function is used to connect the mean to the linear predictor. It ensures that the mean $\mu_t$ remains positive.
-- $\beta_0$ represents the baseline level of deaths when all other terms are zero.
-- $f(t)$ is a smooth function of time, it captures the non-linear trend in deaths over time.
-- $\log(\text{MonthDays}_t)$ is an offset that accounts for the varying number of days in each month.
-- $g(\text{month}_t)$ is a function that captures the seasonal effect of the month on the number of deaths (eg. more accidents in the summer due to increased riding.)
+-   $Y_t$ represents the weekly number of deaths at time t. It is
+    assumed to follow a Poisson distribution.
+-   The Poisson distribution is suitable as number of deaths is a count
+    variable.
+-   The log link function is used to connect the mean to the linear
+    predictor. It ensures that the mean $\mu_t$ remains positive.
+-   $\beta_0$ represents the baseline level of deaths when all other
+    terms are zero.
+-   $f(t)$ is a smooth function of time, it captures the non-linear
+    trend in deaths over time.
+-   $\log(\text{MonthDays}_t)$ is an offset that accounts for the
+    varying number of days in each month.
+-   $g(\text{month}_t)$ is a function that captures the seasonal effect
+    of the month on the number of deaths (eg. more accidents in the
+    summer due to increased riding.)
 
 ## Question 2
 
@@ -120,3 +130,313 @@ legend("topright", legend = c("Observed", "Fitted", "95% CI"),
        pch = c(1, NA, NA), lwd = c(NA, 2, NA), 
        fill = c(NA, NA, rgb(1, 0, 0, 0.3)))
 ```
+
+# Heat
+
+```{r}
+#| warning: false
+#| message: false
+#| include: false
+library("mgcv")
+# Additional code for downloading temperature data
+heatURL = "http://pbrown.ca/teaching/appliedstats/data/sableIsland.rds"
+dir.create("cache", showWarnings = FALSE)
+heatFile = file.path("cache", basename(heatURL))
+if (!file.exists(heatFile)) download.file(heatURL, heatFile)
+x = readRDS(heatFile)
+```
+
+```{r}
+#| message: false
+#| warning: false
+#| include: false
+library(Pmisc)
+library(GET) 
+names(x) = gsub("[.]+C[.]", "", names(x))
+x$Date = as.Date(x$Date)
+x$month = as.numeric(format(x$Date, "%m"))
+x$summer = x$month %in% 5:10
+
+# Data transformation
+x$dateInt = as.integer(x$Date)
+x$yearFac = factor(format(x$Date, "%Y"))
+xSub = x[x$summer & !is.na(x$Max.Temp), ]
+
+# Define model file paths
+model1_file <- "models/res1_model.rds"
+model2_file <- "models/res2_model.rds"
+model3_file <- "models/res3_model.rds"
+
+# Model 1: Generalized Additive Model with k=100
+if (file.exists(model1_file)) {
+  res1 <- readRDS(model1_file)
+} else {
+  res1 = gam(
+    update.formula(
+      Max.Temp ~ s(dateInt, k = 100) + s(yearFac, bs = "re"),
+      Pmisc::seasonalFormula(
+        period = 365.25,
+        harmonics = 1:2,
+        var = "dateInt"
+      )
+    ),
+    data = xSub,
+    method = "ML",
+    optimizer = "efs"
+  )
+  saveRDS(res1, model1_file)
+}
+
+# Model 2: Generalized Additive Model with k=4
+if (file.exists(model2_file)) {
+  res2 <- readRDS(model2_file)
+} else {
+  res2 = gam(
+    update.formula(
+      Max.Temp ~ s(dateInt, k = 4) + s(yearFac, bs = "re"),
+      Pmisc::seasonalFormula(
+        period = 365.25,
+        harmonics = 1:2,
+        var = "dateInt"
+      )
+    ),
+    data = xSub,
+    method = "ML",
+    optimizer = "efs"
+  )
+  saveRDS(res2, model2_file)
+}
+
+# Model 3: Generalized Additive Model with k=100
+if (file.exists(model3_file)) {
+  res3 <- readRDS(model3_file)
+} else {
+  res3 = gam(
+    update.formula(
+      Max.Temp ~ s(dateInt, k = 100),
+      Pmisc::seasonalFormula(
+        period = 365.25,
+        harmonics = 1:2,
+        var = "dateInt"
+      )
+    ),
+    data = xSub,
+    method = "ML",
+    optimizer = "efs"
+  )
+  saveRDS(res3, model3_file)
+}
+```
+
+## Question 1
+
+### Model 1 {.unnumbered}
+
+$$
+\text{Max.Temp}_i = \beta_0 + f_1(t_i) + b_{\text{year}_i} + \text{SEAS}(t_i) + \varepsilon_i
+$$
+
+$$
+\begin{aligned}
+    Y_i &\sim \mathcal{N} (\mu_i, \sigma^2) \\
+    \mu_i &= f_2(t_i) + b_{\text{year}_i} 
+    + \gamma_1 \sin\left( \frac{\pi t_i}{182.625} \right) 
+    + \gamma_2 \cos\left( \frac{\pi t_i}{182.625} \right) \\
+    &\quad + \gamma_3 \sin\left( \frac{\pi t_i}{91.3125} \right)
+    + \gamma_4 \cos\left( \frac{\pi t_i}{91.3125} \right)
+    + \varepsilon_i
+\end{aligned}
+$$
+
+This model includes a flexible smooth trend over time using `s(dateInt, k
+= 100)`, a random effect for each year using `s(yearFac, bs = "re")`, and
+seasonal components using sine and cosine terms with annual and
+semi-annual periods. It captures both long-term trends and year-to-year
+variability. This is the most flexible and complex model. 
+
+- ($Y_i$): daily maximum summer temperature, assumed Gaussian. 
+- ($f_1(t_i)$): smooth function of time ($k=100$), capturing long-term temperature
+trend. 
+- ($b_{\text{year}_i} \sim \mathcal{N} (0, \sigma^2)$): random effect for year-level deviations. 
+- Sine and cosine terms: seasonal components with 1-year and 6-month cycles. 
+- ($\varepsilon_i$): residual error, absorbed into the Gaussian variance.
+
+### Model 2 {.unnumbered}
+$$
+\text{Max.Temp}_i = \beta_0 + f_2(t_i) + b_{\text{year}_i} + \text{SEAS}(t_i) + \varepsilon_i
+$$
+
+$$
+\begin{aligned}
+    \text{Max.Temp}_i &= s(t_i, k = 4) + b_{\text{year}_i} 
+    + \gamma_1 \sin\left( \frac{\pi t_i}{182.625} \right) 
+    + \gamma_2 \cos\left( \frac{\pi t_i}{182.625} \right) \\
+    &\quad + \gamma_3 \sin\left( \frac{\pi t_i}{91.3125} \right) 
+    + \gamma_4 \cos\left( \frac{\pi t_i}{91.3125} \right) 
+    + \varepsilon_i
+\end{aligned}
+$$ 
+Model 2 (res2): This model is similar to res1, but the trend
+component uses a much lower basis dimension k = 4. This means the
+temporal trend is much smoother and less responsive to short-term
+changes. It still includes the year random effect and seasonality.
+Overall, it's a simpler and more conservative model, better for
+detecting broad trends. 
+
+- Identical structure to Model 1 but uses a
+smoother trend term ($f_2(t_i)$) with fewer basis functions ($k=4$).
+
+### Model 3 {.unnumbered}
+
+$$
+\text{Max.Temp}_i = \beta_0 + f_3(t_i) + \text{SEAS}(t_i) + \varepsilon_i
+$$
+
+$$
+\begin{aligned}
+    \text{Max.Temp}_i &= s(t_i, k = 100) 
+    + \gamma_1 \sin\left( \frac{\pi t_i}{182.625} \right) 
+    + \gamma_2 \cos\left( \frac{\pi t_i}{182.625} \right) \\
+    &\quad + \gamma_3 \sin\left( \frac{\pi t_i}{91.3125} \right) 
+    + \gamma_4 \cos\left( \frac{\pi t_i}{91.3125} \right) 
+    + \varepsilon_i
+\end{aligned}
+$$
+Model 3 (res3): This model keeps the flexible smooth trend (k = 100)
+and seasonal components, but removes the year-level random effect. It
+assumes that inter-annual variability is negligible or explained by the
+overall trend. This model is simpler than res1, but potentially misses
+year-specific deviations. 
+
+- Removes the year-level random effect; assumes time trend alone captures variation.
+
+## Question 2
+
+Dear Editor,
+
+While Ms. Burningier cites Figure 3(c) to claim "no clear evidence" of
+warming, this interpretation reflects a critical misunderstanding of
+statistical methodology. Model 3 omits year-level random effects—a
+standard technique for addressing temporal autocorrelation in climate
+data—resulting in excessive noise that obscures underlying trends.
+
+## Question 3
+
+```{r}
+#| warning: false
+#| message: false
+#| echo: false
+#| fig-width: 14
+#| fig-height: 8
+#| fig-cap: "Panel A shows the estimated year-level random effects s(yearFac), which account for annual variability in maximum summer temperatures after removing the long-term trend and seasonal components. Panel B displays the estimated smooth temporal trend s(dateInt) with 200 posterior simulations (in gray) and an 80% joint confidence envelope (in red), revealing a clear long-term warming pattern consistent with climate change evidence."
+Syear = unique(xSub$yearFac)
+predYear = do.call(cbind, predict(res1,
+                                  newdata = data.frame(yearFac = Syear, dateInt = 0),
+                                  type = "terms", terms = "s(yearFac)", se.fit = TRUE)) %*%
+  Pmisc::ciMat()
+
+# Estimate Year Effects
+newdat = data.frame(Date = seq(as.Date("1900/1/1"), as.Date("2035/12/31"), by = "2 weeks"),
+                    yearFac = Syear[1])
+newdat$dateInt = as.integer(newdat$Date)
+predTrend = do.call(cbind, predict(res1, newdat,
+                                   type = "terms", terms = "s(dateInt)", se.fit = TRUE)) %*%
+  Pmisc::ciMat()
+
+newX = predict(res1, newdata = newdat, type = "lpmatrix")
+simCoef = rmvn(200, coef(res1), vcov(res1))  # 200 posterior samples
+isTrend = grep("s[(]dateInt", colnames(newX))
+simTrend = tcrossprod(newX[, isTrend], simCoef[, isTrend])  # Simulated trends
+
+# Compute Smooth Trend
+envV = GET::central_region(GET::curve_set(simTrend), coverage = 0.8)
+
+# Panel A: Year Effects
+Syear_numeric = as.numeric(as.character(Syear))
+matplot(Syear_numeric, predYear, pch = 16, cex = 1.2,
+        col = "black", xlab = "Year", ylab = "Estimated Year Effect (°C)",
+        main = "Panel A: Estimated Year Effects s(yearFac) with 95% CI")
+segments(Syear_numeric, predYear[, 2], Syear_numeric, predYear[, 3],
+         lwd = 1.5, col = "gray40")
+abline(h = 0, lty = 2, col = "darkgray")  # reference line
+
+# Panel B: Smooth Trend
+matplot(newdat$Date, simTrend, type = 'l', lty = 1,
+        col = "#00000010", ylim = quantile(simTrend, c(0.01, 0.99)),
+        xlab = "Date", ylab = "Estimated Smooth Trend s(dateInt) (°C)",
+        main = "Panel B: Long-Term Smooth Trend with 80% Joint Confidence Region")
+matlines(newdat$Date, envV[, c("lo", "hi")], lty = 1, col = "red", lwd = 2)
+abline(h = 0, lty = 2, col = "darkgray")
+
+# Optional legend
+legend("topleft",
+       legend = c("Simulated Trends", "80% Joint Confidence Region"),
+       col = c("#00000050", "red"),
+       lty = 1,
+       lwd = c(1, 2),
+       bty = "n",
+       cex = 0.8)
+```
+
+## Question 4
+
+```{r}
+#| warning: false
+#| message: false
+#| echo: false
+#| fig-width: 14
+#| fig-height: 8
+# Filter summer data from 1900 to 1995
+trainData = xSub[xSub$Date <= as.Date("1995-12-31"), ]
+testData = xSub[xSub$Date >= as.Date("1996-01-01") & xSub$Date <= as.Date("2025-12-31"), ]
+
+# Fix yearFac in test data — this is crucial!
+testData$yearFac = "1995"
+
+# Fit model using only data up to 1995 (same structure as res1)
+resOld = gam(update.formula(
+               Max.Temp ~ s(dateInt, k = 100) + s(yearFac, bs = "re"),
+               Pmisc::seasonalFormula(period = 365.25, harmonics = 1:2, var = "dateInt")
+             ),
+             data = trainData,
+             method = "ML", optimizer = "efs")
+# Predict
+preds = predict(resOld, newdata = testData, se.fit = TRUE)
+fitCI = cbind(preds$fit - 2 * preds$se.fit, preds$fit, preds$fit + 2 * preds$se.fit)
+```
+
+```{r}
+#| warning: false
+#| message: false
+#| echo: false
+#| fig-width: 14
+#| fig-height: 8
+#| fig-cap: "*Panel A* shows observed summer maximum temperatures (gray dots) and the predicted trend (blue line) from a GAM model trained only on data up to 1995. The model clearly captures the warming trend observed between 1996 and 2025, supporting its long-term forecasting ability. *Panel B* plots observed vs. predicted maximum summer temperatures. The strong alignment around the 1:1 line confirms the model’s predictive accuracy, even for future data it has never seen."
+
+par(mfrow = c(1,2))  # Arrange plots side by side
+
+# Panel A: Observed vs Forecasted Trend
+plot(testData$Date, testData$Max.Temp, col = "gray70", pch = 16,
+     xlab = "Date", ylab = "Max Temp (°C)",
+     main = "Panel A: Observed vs Forecasted Trend (1996–2025)")
+lines(testData$Date, preds$fit, col = "blue", lwd = 2)
+matlines(testData$Date, fitCI[, c(1, 3)], col = "blue", lty = 2)
+
+# Panel B: Observed vs. Predicted
+plot(testData$Max.Temp, preds$fit,
+     pch = 16, cex = 0.6, col = "darkblue",
+     xlab = "Observed Max Temp (°C)",
+     ylab = "Predicted Max Temp (°C)",
+     main = "Panel B: Observed vs. Predicted Max Summer Temperatures (1996–2025)")
+abline(0, 1, col = "red", lty = 2, lwd = 2)
+
+par(mfrow = c(1,1))  # Reset plot layout
+```
+
+The claim that climate models “have consistently failed to predict the
+future” is not supported by these results.\
+A GAM model trained only on pre-1996 data successfully captures both the
+upward trend and year-to-year variability in summer temperatures from
+1996 to 2025.\
+This demonstrates that well-specified statistical models can provide
+meaningful and accurate climate forecasts over multi-decade horizons.
