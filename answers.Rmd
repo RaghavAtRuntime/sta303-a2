@@ -387,6 +387,7 @@ legend("topleft",
 #| fig-width: 14
 #| fig-height: 8
 # Filter summer data from 1900 to 1995
+model4_file <- "models/resOld_model.rds"
 trainData = xSub[xSub$Date <= as.Date("1995-12-31"), ]
 testData = xSub[xSub$Date >= as.Date("1996-01-01") & xSub$Date <= as.Date("2025-12-31"), ]
 
@@ -394,12 +395,17 @@ testData = xSub[xSub$Date >= as.Date("1996-01-01") & xSub$Date <= as.Date("2025-
 testData$yearFac = "1995"
 
 # Fit model using only data up to 1995 (same structure as res1)
-resOld = gam(update.formula(
+if (file.exists(model4_file)) {
+  resOld <- readRDS(model4_file)
+} else {
+  resOld = gam(update.formula(
                Max.Temp ~ s(dateInt, k = 100) + s(yearFac, bs = "re"),
                Pmisc::seasonalFormula(period = 365.25, harmonics = 1:2, var = "dateInt")
              ),
              data = trainData,
              method = "ML", optimizer = "efs")
+  saveRDS(resOld, model4_file)
+}
 # Predict
 preds = predict(resOld, newdata = testData, se.fit = TRUE)
 fitCI = cbind(preds$fit - 2 * preds$se.fit, preds$fit, preds$fit + 2 * preds$se.fit)
@@ -411,9 +417,9 @@ fitCI = cbind(preds$fit - 2 * preds$se.fit, preds$fit, preds$fit + 2 * preds$se.
 #| echo: false
 #| fig-width: 14
 #| fig-height: 8
-#| fig-cap: "*Panel A* shows observed summer maximum temperatures (gray dots) and the predicted trend (blue line) from a GAM model trained only on data up to 1995. The model clearly captures the warming trend observed between 1996 and 2025, supporting its long-term forecasting ability. *Panel B* plots observed vs. predicted maximum summer temperatures. The strong alignment around the 1:1 line confirms the model’s predictive accuracy, even for future data it has never seen."
+#| fig-cap: "*Panel A* shows observed summer maximum temperatures (gray dots) and the predicted trend (blue line) from a GAM model trained only on data up to 1995. The model clearly captures the warming trend observed between 1996 and 2025, supporting its long-term forecasting ability."
 
-par(mfrow = c(1,2))  # Arrange plots side by side
+# par(mfrow = c(1,2))  # Arrange plots side by side
 
 # Panel A: Observed vs Forecasted Trend
 plot(testData$Date, testData$Max.Temp, col = "gray70", pch = 16,
@@ -422,6 +428,17 @@ plot(testData$Date, testData$Max.Temp, col = "gray70", pch = 16,
 lines(testData$Date, preds$fit, col = "blue", lwd = 2)
 matlines(testData$Date, fitCI[, c(1, 3)], col = "blue", lty = 2)
 
+# par(mfrow = c(1,1))  # Reset plot layout
+```
+
+```{r}
+#| warning: false
+#| message: false
+#| echo: false
+#| fig-width: 14
+#| fig-height: 8
+#| fig-cap: "*Panel B* plots observed vs. predicted maximum summer temperatures. The strong alignment around the 1:1 line confirms the model’s predictive accuracy, even for future data it has never seen."
+
 # Panel B: Observed vs. Predicted
 plot(testData$Max.Temp, preds$fit,
      pch = 16, cex = 0.6, col = "darkblue",
@@ -429,8 +446,6 @@ plot(testData$Max.Temp, preds$fit,
      ylab = "Predicted Max Temp (°C)",
      main = "Panel B: Observed vs. Predicted Max Summer Temperatures (1996–2025)")
 abline(0, 1, col = "red", lty = 2, lwd = 2)
-
-par(mfrow = c(1,1))  # Reset plot layout
 ```
 
 The claim that climate models “have consistently failed to predict the
